@@ -4,7 +4,9 @@ import electron from 'vite-plugin-electron/simple'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const backendUrl = env.VITE_API_URL?.replace(/\/api\/?$/, '') ?? 'http://localhost:8080'
+  const backendUrl = env.DESKTOP_API_PROXY_TARGET?.replace(/\/api\/?$/, '')
+    ?? env.VITE_API_URL?.replace(/\/api\/?$/, '')
+    ?? 'http://localhost:8080'
 
   return {
     plugins: [
