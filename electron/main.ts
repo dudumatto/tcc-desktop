@@ -1,8 +1,74 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
+const defaultApiBaseUrl = 'https://tcc-backend-jqod.onrender.com/api'
+const permittedApiMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+
+type DesktopApiRequest = {
+  path: string
+  method: string
+  body?: string
+  token?: string
+  responseType?: 'text' | 'binary'
+}
+
+const apiBaseUrl = () => {
+  const configured = (process.env.DESKTOP_API_URL || defaultApiBaseUrl).replace(/\/$/, '')
+  const url = new URL(configured)
+  const isLocalHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)
+
+  if (url.protocol !== 'https:' && !isLocalHttp) {
+    throw new Error('DESKTOP_API_URL must use HTTPS or a local HTTP address.')
+  }
+  if (!url.pathname.endsWith('/api')) {
+    throw new Error('DESKTOP_API_URL must end with /api.')
+  }
+
+  return configured
+}
+
+const apiRequestUrl = (path: string) => {
+  if (!path.startsWith('/') || path.startsWith('//')) {
+    throw new Error('Invalid desktop API path.')
+  }
+
+  const url = new URL(`${apiBaseUrl()}${path}`)
+  if (!url.pathname.startsWith('/api/')) {
+    throw new Error('Desktop API request escaped the API prefix.')
+  }
+
+  return url
+}
+
+ipcMain.handle('desktop:api-request', async (event, request: DesktopApiRequest) => {
+  if (!event.senderFrame || new URL(event.senderFrame.url).protocol !== 'file:') {
+    throw new Error('Desktop API bridge is available only to the packaged application.')
+  }
+  if (!permittedApiMethods.has(request.method)) {
+    throw new Error('Unsupported desktop API method.')
+  }
+
+  const response = await fetch(apiRequestUrl(request.path), {
+    method: request.method,
+    headers: {
+      ...(request.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(request.token ? { Authorization: `Bearer ${request.token}` } : {}),
+    },
+    body: request.body,
+  })
+
+  const body = request.responseType === 'binary'
+    ? new Uint8Array(await response.arrayBuffer())
+    : await response.text()
+
+  return {
+    status: response.status,
+    contentType: response.headers.get('content-type') || '',
+    body,
+  }
+})
 
 const createWindow = () => {
   const window = new BrowserWindow({

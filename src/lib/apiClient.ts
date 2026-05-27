@@ -2,15 +2,33 @@ import { ApiError } from './errors'
 import { tokenStorage } from './tokenStorage'
 
 type RequestOptions = RequestInit & { skipAuth?: boolean }
+type ResponseType = 'text' | 'binary'
 
 const apiUrl = () => {
   const configured = import.meta.env.VITE_API_URL as string | undefined
   return (configured?.replace(/\/$/, '') || '/api')
 }
 
-const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
+const isOk = (status: number) => status >= 200 && status < 300
+
+const send = async (path: string, options: RequestOptions = {}, responseType: ResponseType = 'text'): Promise<DesktopApiResponse> => {
   const { skipAuth, headers, ...init } = options
   const token = tokenStorage.getToken()
+
+  if (window.location.protocol === 'file:' && window.desktop?.request) {
+    if (init.body && typeof init.body !== 'string') {
+      throw new ApiError('Tipo de requisicao nao suportado no aplicativo desktop.', 0)
+    }
+
+    return window.desktop.request({
+      path,
+      method: init.method || 'GET',
+      body: typeof init.body === 'string' ? init.body : undefined,
+      token: !skipAuth && token ? token : undefined,
+      responseType,
+    })
+  }
+
   const response = await fetch(`${apiUrl()}${path}`, {
     ...init,
     headers: {
@@ -20,30 +38,49 @@ const request = async <T>(path: string, options: RequestOptions = {}): Promise<T
     },
   })
 
-  if (response.status === 401 && !skipAuth) {
+  return {
+    status: response.status,
+    contentType: response.headers.get('content-type') || '',
+    body: responseType === 'binary'
+      ? new Uint8Array(await response.arrayBuffer())
+      : await response.text(),
+  }
+}
+
+const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
+  const response = await send(path, options)
+
+  if (response.status === 401 && !options.skipAuth) {
     tokenStorage.clear()
     window.dispatchEvent(new CustomEvent('auth:expired'))
   }
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => null) as { message?: string; code?: string } | null
+  if (!isOk(response.status)) {
+    let body: { message?: string; code?: string } | null = null
+    if (typeof response.body === 'string') {
+      try {
+        body = JSON.parse(response.body) as { message?: string; code?: string }
+      } catch {
+        body = null
+      }
+    }
     throw new ApiError(body?.message || 'Erro ao comunicar com o servidor.', response.status, body?.code)
   }
 
   if (response.status === 204) return undefined as T
-  const contentType = response.headers.get('content-type') || ''
-  return contentType.includes('application/json')
-    ? response.json() as Promise<T>
-    : response.text() as Promise<T>
+  if (typeof response.body !== 'string') {
+    throw new ApiError('Resposta invalida recebida do servidor.', response.status)
+  }
+  return response.contentType.includes('application/json')
+    ? JSON.parse(response.body) as T
+    : response.body as T
 }
 
 const blob = async (path: string): Promise<Blob> => {
-  const token = tokenStorage.getToken()
-  const response = await fetch(`${apiUrl()}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!response.ok) throw new ApiError('Nao foi possivel carregar o documento.', response.status)
-  return response.blob()
+  const response = await send(path, {}, 'binary')
+  if (!isOk(response.status)) throw new ApiError('Nao foi possivel carregar o documento.', response.status)
+  if (!(response.body instanceof Uint8Array)) throw new ApiError('Resposta invalida recebida do servidor.', response.status)
+  return new Blob([response.body], { type: response.contentType })
 }
 
 export const apiClient = {
