@@ -11,6 +11,14 @@ export function DocumentPreviewModal({ document, onClose }: { document: Document
   const [error, setError] = useState('')
   useEffect(() => {
     let currentUrl: string | undefined
+    setUrl(undefined)
+    setError('')
+    const publicUrl = documentsService.previewUrl(document)
+    if (publicUrl) {
+      setUrl(publicUrl)
+      return undefined
+    }
+
     documentsService.preview(document).then((blob) => {
       currentUrl = URL.createObjectURL(blob)
       setUrl(currentUrl)

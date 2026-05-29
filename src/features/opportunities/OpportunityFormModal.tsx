@@ -16,6 +16,7 @@ export function OpportunityFormModal({ project, onSaved, onClose }: { project?: 
   const [vagas, setVagas] = useState(String(project?.vagas ?? 1))
   const [descricao, setDescricao] = useState(project?.descricao ?? '')
   const [requisitos, setRequisitos] = useState(project?.requisitos ?? '')
+  const [tecnologias, setTecnologias] = useState(project?.tecnologias ?? '')
   const [limite, setLimite] = useState(project?.dataLimiteInscricao ?? '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,7 +27,7 @@ export function OpportunityFormModal({ project, onSaved, onClose }: { project?: 
     setBusy(true)
     setError('')
     try {
-      const payload = { titulo, areaId: Number(areaId), vagas: Number(vagas), descricao, requisitos, dataLimiteInscricao: limite || undefined }
+      const payload = { titulo, areaId: Number(areaId), vagas: Number(vagas), descricao, requisitos, tecnologias, dataLimiteInscricao: limite || undefined }
       if (project) await projectsService.update(project.id, payload)
       else await projectsService.create(payload)
       onSaved()
@@ -42,6 +43,7 @@ export function OpportunityFormModal({ project, onSaved, onClose }: { project?: 
         <Input label="Inscricoes ate" type="date" value={limite} onChange={(event) => setLimite(event.target.value)} />
         <label className="field full"><span>Descricao</span><textarea value={descricao} onChange={(event) => setDescricao(event.target.value)} /></label>
         <label className="field full"><span>Requisitos</span><textarea value={requisitos} onChange={(event) => setRequisitos(event.target.value)} /></label>
+        <label className="field full"><span>Tecnologias e competencias</span><textarea value={tecnologias} onChange={(event) => setTecnologias(event.target.value)} placeholder="React, Spring Boot, PostgreSQL" /></label>
         {error && <p className="form-error">{error}</p>}
         <div className="form-actions"><Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button><Button type="submit" disabled={busy}>Salvar</Button></div>
       </form>

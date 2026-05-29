@@ -5,6 +5,7 @@ export interface Project {
   titulo: string
   descricao?: string
   requisitos?: string
+  tecnologias?: string
   vagas: number
   status: ProjectStatus
   dataCriacao: string
@@ -21,6 +22,7 @@ export interface ProjectPayload {
   titulo: string
   descricao?: string
   requisitos?: string
+  tecnologias?: string
   vagas: number
   areaId: number
   dataInicio?: string

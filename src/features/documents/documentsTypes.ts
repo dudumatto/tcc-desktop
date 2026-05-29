@@ -8,6 +8,7 @@ export interface DocumentItem {
   status: DocumentStatus
   observacaoStatus?: string
   nomeArquivo: string
+  url?: string
   dataEnvio: string
   downloadUrl: string
   previewUrl: string
